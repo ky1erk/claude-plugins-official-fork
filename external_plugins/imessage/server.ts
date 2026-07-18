@@ -844,20 +844,24 @@ function handleInbound(r: Row): void {
   }
 
   // attachment.filename is an absolute path (sometimes tilde-prefixed) —
-  // already on disk, no download. Include the first image inline.
+  // already on disk, no download. Include the first image inline, and the
+  // first non-image attachment (PDF, etc.) as a separate file path.
   let imagePath: string | undefined
+  let filePath: string | undefined
   if (hasAttachments) {
     for (const att of qAttachments.all(r.rowid)) {
       if (!att.filename) continue
-      if (att.mime_type && !att.mime_type.startsWith('image/')) continue
-      imagePath = expandTilde(att.filename)
-      break
+      const isImage = att.mime_type && att.mime_type.startsWith('image/')
+      if (isImage && !imagePath) imagePath = expandTilde(att.filename)
+      if (!isImage && !filePath) filePath = expandTilde(att.filename)
+      if (imagePath && filePath) break
     }
   }
 
-  // image_path goes in meta only — an in-content "[image attached — read: PATH]"
-  // annotation is forgeable by any allowlisted sender typing that string.
-  const content = text || (imagePath ? '(image)' : '')
+  // image_path/file_path go in meta only — an in-content "[image attached —
+  // read: PATH]" annotation is forgeable by any allowlisted sender typing
+  // that string.
+  const content = text || (imagePath ? '(image)' : filePath ? '(file)' : '')
 
   void mcp.notification({
     method: 'notifications/claude/channel',
@@ -869,6 +873,7 @@ function handleInbound(r: Row): void {
         user: sender,
         ts: appleDate(r.date).toISOString(),
         ...(imagePath ? { image_path: imagePath } : {}),
+        ...(filePath ? { file_path: filePath } : {}),
       },
     },
   })
