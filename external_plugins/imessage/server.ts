@@ -40,6 +40,9 @@ const ALLOW_SMS = process.env.IMESSAGE_ALLOW_SMS === 'true'
 const SIGNATURE = process.env.IMESSAGE_SIGNATURE ?? '\nSent by Claude'
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const SIGNATURE_RE = new RegExp(`\\s*(?:${escapeRe(SIGNATURE.trim())}|Sent by Claude)\\s*$`)
+// Prepended to every outbound message (e.g. '🦀 '). Empty by default.
+const PREFIX = process.env.IMESSAGE_PREFIX ?? ''
+const PREFIX_RE = PREFIX.trim() ? new RegExp(`^\\s*${escapeRe(PREFIX.trim())}\\s*`) : null
 const CHAT_DB =
   process.env.IMESSAGE_DB_PATH ?? join(homedir(), 'Library', 'Messages', 'chat.db')
 
@@ -437,6 +440,7 @@ const echo = new Map<string, number>()
 function echoKey(raw: string): string {
   return raw
     .replace(SIGNATURE_RE, '')
+    .replace(PREFIX_RE ?? /^$/, '')
     .replace(/[\u200d\ufe00-\ufe0f]/g, '')    // ZWJ + variation selectors — chat.db is inconsistent about these
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
@@ -681,6 +685,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
         const mode = access.chunkMode ?? 'length'
         const chunks = chunk(text, limit, mode)
         if (APPEND_SIGNATURE && chunks.length > 0) chunks[chunks.length - 1] += SIGNATURE
+        if (PREFIX && chunks.length > 0) chunks[0] = PREFIX + chunks[0]
         let sent = 0
 
         for (let i = 0; i < chunks.length; i++) {
