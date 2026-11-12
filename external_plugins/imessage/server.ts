@@ -36,7 +36,10 @@ const APPEND_SIGNATURE = process.env.IMESSAGE_APPEND_SIGNATURE !== 'false'
 // drops SMS/RCS so a forged sender can't reach the gate. Opt in only if you
 // understand the risk.
 const ALLOW_SMS = process.env.IMESSAGE_ALLOW_SMS === 'true'
-const SIGNATURE = '\nSent by Claude'
+// Appended to every outbound message. Override with IMESSAGE_SIGNATURE (e.g. ' 🦀').
+const SIGNATURE = process.env.IMESSAGE_SIGNATURE ?? '\nSent by Claude'
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const SIGNATURE_RE = new RegExp(`\\s*(?:${escapeRe(SIGNATURE.trim())}|Sent by Claude)\\s*$`)
 const CHAT_DB =
   process.env.IMESSAGE_DB_PATH ?? join(homedir(), 'Library', 'Messages', 'chat.db')
 
@@ -433,7 +436,7 @@ const echo = new Map<string, number>()
 
 function echoKey(raw: string): string {
   return raw
-    .replace(/\s*Sent by Claude\s*$/, '')
+    .replace(SIGNATURE_RE, '')
     .replace(/[\u200d\ufe00-\ufe0f]/g, '')    // ZWJ + variation selectors — chat.db is inconsistent about these
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
